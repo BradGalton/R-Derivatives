@@ -1,0 +1,100 @@
+###################################################################################
+# Valuation of Asian Call Option on Continuous Arithmetic Average 
+# Monte Carlo Simulation Method
+###################################################################################
+S0 <- 2
+K <- 2
+r <- 0.05
+q <- 0
+vol <- 0.50
+T <- 2
+# Pilot Run for #2(b)
+n <- 1000
+dt <- T/n
+n.paths <- 1000
+
+S <- rep(S0,n.paths)
+At <- rep(0,n.paths)
+ptm <- proc.time()
+for(i in 1:n) {
+  eps <- rnorm(n.paths)
+  St <- S*exp((r-q-0.5*vol^2)*dt+vol*sqrt(dt)*eps)
+  At <- At + dt*0.5*(St+S)
+  S <- St
+}
+t.run <- proc.time()-ptm
+Ay <- At/T
+y <- exp(-r*T)*pmax(Ay-K,0) 
+(V.y <- mean(y))
+(se.y <- sqrt(var(y)/n.paths))
+
+###################################################################################
+# Valuation of Asian Call Option on Continuous Arithmetic Average 
+# Control Variate Method Using Asian Call Option on Discrete Geometric Average
+###################################################################################
+S <- rep(S0,n.paths)
+Ay <- rep(0,n.paths)
+Ax <- rep(0,n.paths)
+ptm <- proc.time()
+for(i in 1:n) {
+  eps <- rnorm(n.paths)
+  St <- S*exp((r-q-0.5*vol^2)*dt+vol*sqrt(dt)*eps)
+  Ay <- Ay+dt*0.5*(St+S)
+  Ax <- Ax+log(St)
+  S <- St
+}
+t.run <- proc.time()-ptm
+
+Ay <- Ay/T
+Ax <- exp(Ax/n)
+y <- exp(-r*T)*pmax(Ay-K,0) 
+x <- exp(-r*T)*pmax(Ax-K,0)
+(V.y <- mean(y))
+(V.x <- mean(x))
+(se.y <- sqrt(var(y)/n.paths))
+(se.x <- sqrt(var(x)/n.paths))
+
+######################################################################
+# Control Variate Simulations
+b.hat <- cov(y,x)/var(x)
+
+qprime <- r-((r-q-0.5*vol^2)*(n+1))/(2*n)-(vol^2/2)*(n*(n+1)*(2*n+1))/(6*n^3)
+volprime <- vol*sqrt((n*(n+1)*(2*n+1))/(6*n^3))
+dp <- (log(S0/K)+(r-qprime+0.5*vol^2)*T)/(volprime*sqrt(T))
+dm <- (log(S0/K)+(r-qprime-0.5*vol^2)*T)/(volprime*sqrt(T))
+E.At <- S0*exp((r-qprime-0.5*volprime^2)*T+volprime*sqrt(T)*eps)
+type <- ifelse(E.At>K,1,0)
+
+if(type==1) {
+  call.geometric <- exp(-qprime*T)*S0*pnorm(dp)-exp(-r*T)*K*pnorm(dm)
+  price.CV <- y-b.hat*(x-call.geometric)
+} else {
+  put.geometric <- exp(-r*T)*K*pnorm(-dm)-exp(-qprime*T)*S0*pnorm(-dp)
+  price.CV <- y-b.hat*(x-put.geometric)
+}
+
+n <- 10000
+dt <- T/n
+n.paths <- 10000
+# Function Calls
+y.1 <- y-cov(y,x)*(x-Ex)
+(y.hat1 <- mean(y.1))
+(se1 <- sqrt(var(y.1)/n.paths))
+
+n <- 1000
+dt <- T/n
+n.paths <- 100000
+# Function Calls
+Ex <- exp(-r*T)*pmax(S0*exp((r-q-0.5*vol^2)*T*(n+1)/(2*n)+(vol^2/2)*T*n*((n+1)*(2*n+1))/(6*n^3))-K,0)
+y.2 <- y-b.hat*(x-Ex)
+(y.hat2 <- sum(y.2)/n.paths)
+(se2 <- sqrt(var(y.2)/n.paths))
+
+n <- 10000
+dt <- T/n
+n.paths <- 100000
+# Function Calls
+Ex <- exp(-r*T)*pmax(S0*exp((r-q-0.5*vol^2)*T*(n+1)/(2*n)+(vol^2/2)*T*n*((n+1)*(2*n+1))/(6*n^3))-K,0)
+y.3 <- y-b.hat*(x-Ex)
+(y.hat3 <- mean(y.3))
+(se3 <- sqrt(var(y.3)/n.paths))
