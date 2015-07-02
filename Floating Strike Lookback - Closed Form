@@ -1,0 +1,15 @@
+##############################################################################
+# Closed Form Solution for European-style Floating Strike Lookback Put Option
+##############################################################################
+S0 <- 50
+r <- 0.10
+q <- 0
+vol <- 0.40
+T <- 0.5
+N <- 100000
+Smax <- S0
+b1 <- (log(Smax/S0)+(-r+q+0.5*vol^2)*T)/(vol*sqrt(T))
+b2 <- b1-vol*sqrt(T)
+b3 <- (log(Smax/S0)+(r-q-0.5*vol^2)*T)/(vol*sqrt(T))
+Y2 <- (2*(r-q-0.5*vol^2)*log(Smax/S0))/vol^2
+(P.fl <- Smax*exp(-r*T)*(pnorm(b1)-(vol^2/(2*(r-q)))*exp(Y2)*pnorm(-b3))+S0*exp(-q*T)*vol^2/(2*(r-q))*pnorm(-b2)-S0*exp(-q*T)*pnorm(b2))
