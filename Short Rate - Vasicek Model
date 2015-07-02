@@ -1,0 +1,65 @@
+Short Rate - Vasicek Model
+
+###################################################################################
+# Probability Function
+###################################################################################
+r0 <- 0.01
+theta <- 0.03
+vol <- 0.025
+k <- 0.10
+T <- 5
+
+z <- (-exp(-k*T)*r0-theta*(1-exp(-k*T)))/sqrt((vol^2/(2*k))*(1-exp(-2*k*T)))
+(pnorm(z))
+
+###################################################################################
+# Calibrated Vasicek Model
+###################################################################################
+L <- 10000000
+vol <- 0.2
+k <- 0.2
+Rk <- 0.09
+rt <- c(0.06,0.066,0.07,0.073,0.075,0.076,0.0765,0.077,0.0773,0.0775)
+T <- c(1,1.5,2,2.5,3,3.5,4,4.5,5)
+dt <- 0.5
+
+PT <- exp(-rt[2:10]*T)
+Pt <- exp(-rt[1:9]*(T-dt))
+Bt <- (1/k)*(1-exp(-k*dt))
+dp <- (log(Pt/(PT*(1+dt*Rk)))+0.5*Bt^2*vol^2/(2*k)*(1-exp(-2*k*(T-dt))))/(Bt*sqrt((vol^2/(2*k))*(1-exp(-2*k*(T-dt)))))
+dm <- (log(Pt/(PT*(1+dt*Rk)))-0.5*Bt^2*vol^2/(2*k)*(1-exp(-2*k*(T-dt))))/(Bt*sqrt((vol^2/(2*k))*(1-exp(-2*k*(T-dt)))))
+
+###################################################################################
+# Valuation of Interest Rate Caplets
+###################################################################################
+(Vc <- L*Pt*pnorm(dp)-L*(1+dt*Rk)*PT*pnorm(dm))
+(sum(Vc))
+
+###################################################################################
+# Optimization of Floor Rate for Zero Cost Collar
+###################################################################################
+ZeroCollar.obj <- function(L,dt,Rf,PT,Pt,dp,dm) {
+  Vf <- L*(1+dt*Rf)*PT*pnorm(-dm)-L*Pt*pnorm(-dp)
+  sum(Vf)-sum(Vc)
+}
+(Rf <- uniroot(function(Rf) ZeroCollar.obj(L,dt,Rf,PT,Pt,dp,dm),c(-.01,.1),tol=1e-9)$root)
+
+###################################################################################
+# Black's Model & LIBOR Market Model
+# Optimization of Implied Volatility for Caplet
+###################################################################################
+rm(vol)
+Li <- (1/dt)*(Pt/PT-1)
+T <- c(.5,T[-length(T)])
+
+Blacks <- function(PT,Pt,T,dt,L,Li,Rk,vol) {
+  dp <- (log(Li/Rk)+0.5*vol^2*T)/(vol*sqrt(T))
+  dm <- (log(Li/Rk)-0.5*vol^2*T)/(vol*sqrt(T))
+  Vb <- L*PT*dt*(Li*pnorm(dp)-Rk*pnorm(dm))
+  return(Vb)
+}
+
+ImpliedVol.obj <- function(Vc,PT,Pt,T,dt,L,Li,Rk,vol) {
+  Vc-Blacks(PT,Pt,T,dt,L,Li,Rk,vol)
+}
+(vol <- uniroot(function(vol) ImpliedVol.obj(Vc[5],PT[5],Pt[5],T[5],dt,L,Li[5],Rk,vol),c(-1,1),tol=1e-9)$root)
