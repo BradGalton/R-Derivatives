@@ -1,0 +1,29 @@
+###################################################################################
+# Binomial Lattice Method
+# Valuation of American-style Floating Strike Lookback Put Option
+###################################################################################
+S0 <- 50
+r <- 0.10
+q <- 0
+vol <- 0.40
+T <- 0.5
+N <- 100000
+
+bin.lattice.Amer<-function(N,T,S0,r,vol){
+  dt<-T/N
+  u<-exp(vol*sqrt(dt))
+  d<-exp(-vol*sqrt(dt))
+  p<-(exp(r*dt)-d)/(u-d)
+  df<-exp(-r*dt)
+  V<-pmax(0,(u^(0:N)-1))  
+  V.new <- rep(NA,N)
+  j.index<-seq(from=N-1,to=0,by=-1)
+  for (j in j.index) {
+    Y <- u^(0:j)
+    V.new[1] <- pmax(df*(p*u*V[1]+(1-p)*d*V[2]),Y[1]-1)
+    V.new[2:(j+1)] <- pmax(df*(p*u*V[1:j]+(1-p)*d*V[3:(j+2)]),Y[2:(j+1)]-1)
+    V[1:(j+1)]<-V.new[1:(j+1)]
+  }  
+  f<-S0*V[1]
+}
+(v <- bin.lattice.Amer(N,T,S0,r,vol))
