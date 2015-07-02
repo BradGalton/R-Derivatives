@@ -1,0 +1,160 @@
+Short Rate - Black Derman Toy
+
+###################################################################################
+# Black-Derman-Toy Parameter Fitting to ZCB Curve
+# Root-Finding Procedure for Theta
+###################################################################################
+P <- c(97.53099,94.91179,92.15791,89.2853,86.31022,83.24906,80.11824,76.934)
+vol <- 0.15
+dt <- 0.5
+p <- 0.5
+F <- 100
+z.mat <- matrix(0,nrow=length(P),ncol=length(P))
+z.mat[1,1] <- log(-1/dt*log(P[1]/100))
+
+BDT.obj <- function(P,z,z.mat,vol,dt,p,F,theta) {
+  N <- length(z)
+  df.mat <- ifelse(z.mat!=0,exp(-exp(z.mat)*dt),0)
+  dfm <- exp(-exp(z+theta*dt-vol*sqrt(dt))*dt)
+  dfp <- exp(-exp(z+theta*dt+vol*sqrt(dt))*dt)
+  A <- choose(N,0:N)*p^(0:N)*((1-p)^(N-(0:N)))
+  V <- c(dfm[1]*A[1],dfp[1:N]*A[2:(N+1)])*F
+  df.new <- 1
+  for(j in 1:N) {
+    df.sum <- df.new*df.mat[j,1:j]
+    df.new <- c(df.sum[1],df.sum[-length(df.sum)]+0.5*diff(df.sum),df.sum[j]) 
+  }
+  V <- V*df.new
+  P-sum(V)
+}
+
+BDT.theta <- function(P,z.mat,vol,dt) {
+  th <- rep(0,length(P)-1)
+  for(i in 2:length(P)) {
+    th[i-1] <- uniroot(function(theta) BDT.obj(P[i],z.mat[(i-1),1:(i-1)],z.mat,vol,dt,p,F,theta),c(-10,10),tol=1e-9)$root
+    z.mat[i,1] <- z.mat[(i-1),1]+th[(i-1)]*dt-vol*sqrt(dt)
+    z.mat[i,(2:i)] <- ifelse(z.mat[(i-1),1:(i-1)]!=0,z.mat[(i-1),1:(i-1)]+th[(i-1)]*dt+vol*sqrt(dt),0)
+  }
+  return(list(th,exp(z.mat[nrow(z.mat),])))
+}
+(theta <- BDT.theta(P,z.mat,vol,dt))
+
+###################################################################################
+# Calibrated Black-Derman-Toy Lattice
+###################################################################################
+z0 <- -3.506558
+vol <- 0.2
+theta <- c(0.4994726,0.3931072,0.3239824,0.275868,0.2408606)
+rfl <- 0.055
+m <- 2
+dt <- 0.5
+L <- 1000000
+
+BDT.z <- function(z0,vol,theta,dt) {
+  z.mat <- matrix(0,nrow=length(theta)+1,ncol=length(theta)+1)
+  z.mat[1,1] <- z0
+  for(i in 1:(nrow(z.mat)-1)) {
+    z.mat[i+1,1] <- z.mat[i,1]+theta[i]*dt-vol*sqrt(dt)
+    for(j in 2:ncol(z.mat)) {
+      z.mat[i+1,j] <- ifelse(z.mat[i,j-1]!=0,z.mat[i,j-1]+theta[i]*dt+vol*sqrt(dt),0)
+    }
+  }
+  return(z.mat)
+}
+
+z.mat <- BDT.z(z0,vol,theta,dt)
+R.mat <- ifelse(z.mat!=0,m*((exp(exp(z.mat)*dt))-1),0)
+r.mat <- ifelse(z.mat!=0,exp(z.mat),0)
+cf.mat <- ifelse(R.mat!=0,pmax(L*dt*(rfl-R.mat),0),0)
+
+###################################################################################
+# Valuation of Interest Rate Floorlets
+###################################################################################
+BDT.floor <- function(r.mat,cf.mat,dt) {
+  F <- exp(-r.mat[nrow(r.mat),]*dt)*(cf.mat[nrow(cf.mat),])
+  for(i in (nrow(r.mat)-1):2) {
+    F.new <- exp(-r.mat[i,(1:i)]*dt)*(p*F[1:i]+(1-p)*F[2:(i+1)]+cf.mat[i,(1:i)])
+    F <- F.new
+  }
+  F <- exp(-r.mat[1,1]*dt)*(p*F[1]+(1-p)*F[2])
+  return(F)
+}
+(F <- BDT.floor(r.mat,cf.mat,dt))
+
+###################################################################################
+# Valuation of European-style Receiver Swaption
+###################################################################################
+Rk <- 0.075
+T <- 2
+n <- 1
+
+cf.mat <- ifelse(R.mat!=0,L*dt*(Rk-R.mat),0)
+cf.mat[1:4,] <- 0
+S <- exp(-r.mat[nrow(r.mat),]*dt)*cf.mat[nrow(cf.mat),]
+S <- exp(-r.mat[5,(1:5)]*dt)*(p*S[1:5]+p*S[2:6]+cf.mat[5,(1:5)])
+
+BDT.swaption <- function(r.mat,cf.mat,dt) {
+  S <- pmax(S,0)
+  for(i in (nrow(r.mat)-2):1) {
+    S.new <- exp(-r.mat[i,(1:i)]*dt)*(p*S[1:i]+(1-p)*S[2:(i+1)])
+    S <- S.new
+  }
+  return(S)
+}
+(S <- BDT.swaption(r.mat,cf.mat,dt))
+
+###################################################################################
+# Valuation of Non-callable Bond
+###################################################################################
+z0 <- -3.218876
+vol <- 0.27
+theta <- c(0.2246866,0.1965726,0.1751293,0.1586324,0.1459526,0.1363165,0.1291721)
+c <- 0.06
+m <- 2
+T <- 4
+dt <- 0.5
+F <- 100
+z.mat <- BDT.z(z0,vol,theta,dt)
+r.mat <- ifelse(z.mat!=0,exp(z.mat),0)
+
+BDT.bond <- function(r.mat,c,m,dt,F) {
+  V <- exp(-r.mat[nrow(r.mat),]*dt)*(F+F*c/m)
+  for(i in (nrow(r.mat)-1):1) {
+    V.new <- exp(-r.mat[i,(1:i)]*dt)*(p*V[1:i]+(1-p)*V[2:(i+1)]+F*c/m)
+    V <- V.new
+  }
+  return(V)
+}
+(V <- BDT.bond(r.mat,c,m,dt,F))
+
+###################################################################################
+# Valuation of Call Option on Bond
+###################################################################################
+BDT.call <- function(r.mat,c,m,T,dt,F) {
+  C <- rep(0,m*T+1)
+  V <- exp(-r.mat[nrow(r.mat),]*dt)*(F+F*c/m)
+  for(i in nrow(r.mat):2) {
+    C.new <- pmax(pmax(V-F,0),exp(-r.mat[i,(1:i)]*dt)*(p*C[1:i]+(1-p)*C[2:(i+1)]))
+    C <- C.new
+    V <- exp(-r.mat[(i-1),1:(i-1)]*dt)*(p*V[1:(i-1)]+(1-p)*V[2:i]+F*c/m)
+  }
+  C <- exp(-r.mat[1,1]*dt)*(p*C[1]+(1-p)*C[2])
+  return(C)
+}
+(C <- BDT.call(r.mat,c,m,T,dt,F))
+
+###################################################################################
+# Valuation of Callable Bond
+###################################################################################
+(V-C)
+
+###################################################################################
+# Option-adjusted Spread
+###################################################################################
+Pmkt <- V-C-0.40
+
+OAS.obj <- function(OAS,r.mat,c,m,dt,F) {
+  r.mat <- ifelse(r.mat!=0,r.mat+OAS,0)
+  Pmkt-(BDT.bond(r.mat,c,m,dt,F)-BDT.call(r.mat,c,m,T,dt,F))
+}
+(OAS <- uniroot(function(OAS) OAS.obj(OAS,r.mat,c,m,dt,F),c(-10,10)))$root
