@@ -1,0 +1,44 @@
+###################################################################################
+# Implied Volatility - eBay Options
+###################################################################################
+S0 <- 54.37
+K <- c(40,45,50,52.5,55,57.5,60,62.5,65,70)
+r <- log(1+0.0044316)
+q <- 0
+vol <- seq(0,.5,.001)
+T <- 56/365
+c <- c(14.5,9.575,5.05,3.25,1.905,1.04,.555,.295,.165,.075)
+
+###################################################################################
+# Black-Scholes Function
+###################################################################################
+eur.call <- function(S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  d2 <- (log(S0/K)+(r-q-(vol^2)/2)*T)/(vol*sqrt(T))
+  c <- S0*exp(-q*T)*pnorm(d1)-K*exp(-r*T)*pnorm(d2)
+}
+
+###################################################################################
+# Newton-Raphson Algorithm for Implied Volatilities
+###################################################################################
+NewtonRaphson <- function(x) {
+  d1 <- (log(S0/K)+(r-q+(x^2)/2)*T)/(x*sqrt(T))
+  f <- eur.call(S0,K,r,q,x,T)-c
+  fprime <- sqrt(T)*S0*dnorm(d1)
+  x-f/fprime
+}
+x <- 0.5
+old <- 0
+tol <- 1e-07
+while(abs(old-x)>tol) {
+  old <- x
+  x <- NewtonRaphson(x)
+}
+
+vol.imp <- x
+(rbind(K,vol.imp))
+
+####################################################################################
+# Plot of eBay Call Option Implied Volatilities
+####################################################################################
+plot(K,vol.imp,type="l",main="eBay Call Options: Implied Volatility vs Strike Price",xlab="K",ylab="Implied Volatility",col=2)
