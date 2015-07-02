@@ -1,0 +1,82 @@
+###################################################################################
+# Monte Carlo Simulation of Discrete Interval Barrier Option 
+###################################################################################
+S0 <- 100
+K <- 100
+H <- 105
+R <- 3
+r <- 0.08
+q <- 0.04
+vol <- 0.25
+T <- 0.5
+n <- 1000
+n.paths <- 10000
+n2 <- 100000
+n3 <- 1000000
+n4 <- 10000000
+
+# Black-Scholes-Merton Put Value
+d1 <- (log(S0/K)+(r-q+0.5*vol^2)*T)/vol*sqrt(T)
+d2 <- (log(S0/K)+(r-q-0.5*vol^2)*T)/vol*sqrt(T)
+(p <- K*exp(-r*T)*pnorm(-d2)-S0*exp(-q*T)*pnorm(-d1))
+
+# Up-and-Out Barrier Put Value (Continuous Monitoring, No Rebate)
+lamba <- (r-q+vol^2/2)/vol^2
+y <-log(((H*exp(.5826*vol*sqrt(T/126)))^2)/(S0*K))/(vol*sqrt(T))+lamba*vol*sqrt(T)
+x1 <- log(S0/H)/(vol*sqrt(T))+lamba*vol*sqrt(T)
+y1 <- log(H/S0)/(vol*sqrt(T))+lamba*vol*sqrt(T)
+(p.ui <- -S0*exp(-q*T)*(H*exp(.5826*vol*sqrt(T/126))/S0)^(2*lamba)*pnorm(-y)+K*exp(-r*T)*(H*exp(.5826*vol*sqrt(T/126))/S0)^(2*lamba-2)*pnorm(-y+vol*sqrt(T)))
+(p.uo <- p-p.ui)
+
+# Monte Carlo Valuation
+S <- rep(0,127)
+S[1] <- S0
+V <- rep(0,126)
+N <- length(V)
+indic.temp <- rep(1,n)
+indic <- rep(1,n)
+for(i in 1:126) {
+  St <- S[i]*exp((r-q-0.5*vol^2)*dt+vol*sqrt(dt)*rnorm(n))
+  S[i+1] <- mean(St)
+  indic.temp <- ifelse(St>=H,0,1)
+  indic <- ifelse(indic==0,0,indic.temp)
+  put <- exp(-r*dt)*pmax(K-St,0)
+  reb <- exp(-r*dt)*R
+  vr <- ifelse(indic.temp==0,reb,0)
+  vt <- ifelse(indic==1,indic*put,0)
+  V[i] <- sum(vt)/length(vt[which(vt>0)])+sum(vr)/length(vr[which(vr>0)])
+}
+(V)
+
+vr.se <- sd(vr)/(sqrt(length(vr[which(vr>0)])))
+vt.se <- sd(vt)/(sqrt(length(vt[which(vt>0)])))
+a <- (H/S0)^(-1+2*(r-q)/(vol^2))
+b <- (H/S0)^(1+2*(r-q)/(vol^2))
+
+d1 <- (log(S0/K)+(r-q+0.5*vol^2)*T)/vol*sqrt(T)
+d2 <- (log(S0/K)+(r-q-0.5*vol^2)*T)/vol*sqrt(T)
+d7 <- (log((S0*K)/H^2)-(r-q-0.5*vol^2)*T)/vol*sqrt(T)
+d8 <- (log((S0*K)/H^2)-(r-q+0.5*vol^2)*T)/vol*sqrt(T)
+VBS <- exp(-r*T)*K*(pnorm(-d2)-a*pnorm(d7))-exp(-q*T)*S0*(pnorm(-d1)-b*pnorm(d8))
+
+##################################################################################
+dt<-T/n
+S<-rep(S0,n.paths)
+# Indicator Function: 1 if barrier has been hit; 0 otherwise
+Indic<-rep(0,n.paths)
+#record time at which option is knocked out; if not knocked out, set to 9999
+hit.time<-rep(9999,n.paths)
+
+for (i in 1:n){
+  eps<-rnorm(n.paths)
+  S<-S*exp((r-q-0.5*vol^2)*dt+vol*sqrt(dt)*eps)
+  Indic.temp<-ifelse(S>=H,1,0)
+  Indic<-ifelse(Indic==1,1,Indic.temp)
+  hit.time<-ifelse(Indic==1,pmin(i*dt,hit.time),hit.time)
+}
+
+payoff<-(1-Indic)*exp(-r*T)*pmax(type*(S-K),0)+Indic*exp(-r*hit.time)*R
+
+price<-mean(payoff)
+se<-sqrt(var(payoff)/n.paths)
+f<-list("price"=price,"se"=se)
