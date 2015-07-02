@@ -1,0 +1,77 @@
+###################################################################################
+# Trinomial Lattice & Explicit Finite Difference Methods
+# American Power Put
+###################################################################################
+# Trinomial Lattice Function w/ Specified Parameter for Lambda
+tri.lattice.Amer<-function(N,T,type,S0,K,r,vol){
+  dt<-T/N
+  lambda <- sqrt(3/2)
+  u<-exp(lambda*vol*sqrt(dt))
+  d<-exp(-lambda*vol*sqrt(dt))
+  df <- exp(-r*dt)
+  pd <- 1/(2*(lambda^2))-((r-q-0.5*(vol^2))*sqrt(dt))/(2*lambda*vol)
+  pm <- 1-(1/(lambda^2))
+  pu <- 1/(2*(lambda^2))+((r-q-0.5*(vol^2))*sqrt(dt))/(2*lambda*vol)
+  j <- seq(-N,N,1)
+  V<-pmax(0,type*(((S0*(u^j))^p-K^p)))
+  k.index<-seq(from=N-1,to=0,by=-1)
+  for (k in k.index) {
+    S<-S0*(u^((0-k):k))
+    V.new<-df*(pu*V[3:((2*k)+3)]+pm*V[2:((2*k)+2)]+pd*V[1:((2*k)+1)])
+    V.new<-pmax(V.new,K^p-S^p)
+    V<-V.new
+  } 
+  f <- V[1]
+}
+
+#########################################################################################
+Trinomial Lattice Prices
+#########################################################################################
+K <- 100
+q <- 0
+r <- 0.05
+vol <- 0.20
+type <- -1
+T <- 1
+N <- 200
+p <- 2
+
+S0 <- seq(0,200,1)
+tri.mat <- matrix(0,nrow=2,ncol=201)
+tri.mat[1,] <- S0             
+for(i in 1:length(S0)) {
+  tri.mat[2,i] <- tri.lattice.Amer(N,T,type,S0[i],K,r,vol)
+}
+
+###################################################################################
+Explicit Finite Difference Method
+###################################################################################
+S <- seq(0,200)
+dS <- 1
+dt <- 1/(vol*length(S))^2
+v1 <- dt/dS^2
+v2 <- dt/dS
+
+i <- length(S)
+V <- pmax(type*(S^p-K^p),0)
+V.new <- rep(0,i)
+k.index<-seq(from=N-1,to=0,by=-1)
+for (k in k.index) {
+  a <- 0.5*vol^2*(S[2:(i-1)]^2)
+  b <- (r-q)*S[2:(i-1)]
+  c <- -r
+  A <- v1*a-0.5*v2*b
+  B <- -2*v1*a+dt*c
+  C <- v1*a+0.5*v2*b
+  V.new[length(S)] <- 0
+  V.new[1] <- exp(-r*dt*(N-k))*K^p
+  V.new[2:(i-1)] <- A*V[1:(i-2)]+(1+B)*V[2:(i-1)]+C*V[3:i]
+  V <- pmax(V.new,type*S^p-K^p)
+}
+
+#####################################################################################
+Plot of Methods Convergence 
+#####################################################################################
+plot(S0,tri.mat[2,],main="American Power Put Value: Trinomial vs Explicit Finite Difference",xlab="S0 ($)",ylab="Option Value ($)",type="l",lwd=1,col=2)
+lines(S0,V,type="l",lwd=1,col=4)
+legend("topright",c("Trinomial Lattice","Explicit Difference"),lty=1,lwd=1,col=c(2,4),bty="n")
