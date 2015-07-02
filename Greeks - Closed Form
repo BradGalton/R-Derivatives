@@ -1,0 +1,55 @@
+###################################################################################
+# Black-Scholes Functions
+###################################################################################
+eur.call <- function(S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  d2 <- (log(S0/K)+(r-q-(vol^2)/2)*T)/(vol*sqrt(T))
+  c <- S0*exp(-q*T)*pnorm(d1)-K*exp(-r*T)*pnorm(d2)
+}
+
+eur.put <- function(S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  d2 <- (log(S0/K)+(r-q-(vol^2)/2)*T)/(vol*sqrt(T))
+  p <- K*exp(-r*T)*pnorm(-d2)-S0*exp(-q*T)*pnorm(-d1)
+}
+
+###################################################################################
+# Greeks - European Call
+###################################################################################
+S0 <- 1200
+K <- 1140
+r <- 0.06
+q <- 0.03
+vol <- 0.30
+T <- 0.5
+
+# Call Delta
+eur.call.delta <- function(S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  delta <- exp(-q*T)*pnorm(d1)
+}
+
+# Call Gamma
+eur.call.gamma <- function(S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  gamma <- (dnorm(d1)*exp(-q*T))/(S0*vol*sqrt(T))
+}
+
+# Call Theta
+eur.call.theta <- function(S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  d2 <- (log(S0/K)+(r-q-(vol^2)/2)*T)/(vol*sqrt(T))
+  theta <- (-S0*dnorm(d1)*vol*exp(-q*T))/(2*sqrt(T))+q*S0*pnorm(d1)*exp(-q*T)-r*K*exp(-r*T)*pnorm(d2)
+}
+
+# Call Vega
+eur.call.vega <- function (S0,K,r,q,vol,T) {
+  d1 <- (log(S0/K)+(r-q+(vol^2)/2)*T)/(vol*sqrt(T))
+  vega <- S0*sqrt(T)*dnorm(d1)*exp(-q*T)
+}
+
+# Call Rho
+eur.call.rho <- function(S0,K,r,q,vol,T) {
+  d2 <- (log(S0/K)+(r-q-(vol^2)/2)*T)/(vol*sqrt(T))
+  rho <- K*T*exp(-r*T)*pnorm(d2)
+}
