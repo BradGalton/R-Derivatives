@@ -1,0 +1,119 @@
+
+###############################################################################
+# Function to generate a simulted path of GMWB contract
+###############################################################################
+# Input:
+#   nPeriod
+#   mu
+#   sigma
+#   S0
+#   aFee: fee rate for one time period
+#   aWRate: withdrawl rate for one time period
+
+# Output:
+#   Matrix containing: Sbw, Saw, payOut and loss
+
+GMWB=function(nPeriod,mu,sigma,S0,aFee,aWRate,W){
+    # vector for fund before withdrawl
+    Sbw=rep(0,nPeriod+1)
+    # vector for fund after withdrawl
+    Saw=rep(0,nPeriod+1)
+    # vector for fund after fee collection
+    Saf=rep(0,nPeriod+1)
+    # vector for the loss incurred
+    loss=rep(0,nPeriod+1)
+    # vector for the pay out
+    payOut=rep(0,nPeriod+1)
+    # vector for the fees collected
+    fee=rep(0,nPeriod+1)
+    # flag variable. If the investment account went negative, then this is true
+    isNegative=rep(FALSE,nPeriod+1)
+    # flag variable. If the minimum responsibility is paid out, then this is true (only useful when the investment account goes negative)
+    isFulfilled=rep(FALSE,nPeriod+1)
+    # initial investment
+    Saw[1]=S0
+    Saf[1]=S0
+
+    for(i in 1:nPeriod){
+        # Simulation ends when the investment account goes under zero and the obligation is fulfilled
+        if(isNegative[i] && isFulfilled[i]){
+            break
+        }
+        
+        # Continue payout when investment account goes under zero but the obligation is not fulfilled
+        if(isNegative[i] && (!isFulfilled[i])){
+            payOut[i+1]=min(c(S0*aWRate,S0-sum(payOut)))
+            loss[i+1]=payOut[i+1]
+            if(sum(payOut)==S0){
+                isFulfilled[i+1]=TRUE
+            }
+        }
+        
+        # Simulation and pay out continue when the investment account is positive and the obligation is not fulfilled
+        if(!isNegative[i] && !isFulfilled[i]){
+            Sbw[i+1]=Saf[i]*exp(mu-0.5*sigma^2+sigma*W[i])
+            payOut[i+1]=min(S0*aWRate,S0-sum(payOut))
+            Saw[i+1]=Sbw[i+1]-payOut[i+1]
+            if(Saw[i+1]<=0){
+                isNegative[(i+1):(nPeriod+1)]=TRUE
+                loss[i+1]=abs(Saw[i+1])
+                Saw[i+1]=0
+            } 
+            # When Saw[i+1] is positive, an annual fee is collected from the investment account
+            else {
+                fee[i+1]=Saw[i+1]*aFee
+                Saf[i+1]=Saw[i+1]-fee[i+1]
+            }
+            if(sum(payOut)==S0){
+                isFulfilled[i+1]=TRUE
+            }
+        }
+        
+        # Simulation ends when the investment account is positive and the obligation is fulfilledand the remaining funds are immediately paid out
+        if(!isNegative[i] && isFulfilled[i]){
+            payOut[i]=payOut[i]+Saw[i]
+            Saw[i]=0
+            break
+        }
+    }
+    return(cbind(Sbw,Saw,Saf,payOut,loss,fee,isNegative,isFulfilled))
+}
+
+###############################################################################
+# Function to price GMWB contract at time T
+###############################################################################
+
+doGMWB<- function(guessFee,nPeriod,mu,sigma,S0,aWRate){
+    valGMWB=0
+    i=0
+    while(i<nSim){
+        i=i+1
+        tmp=GMWB(nPeriod,mu,sigma,S0,guessFee,aWRate)
+        valGMWB=valGMWB+pvGMWB(tmp,df)
+    }  
+    valGMWB/nSim
+}
+
+###############################################################################
+# Functions to price GMWB contract at time t=0
+###############################################################################
+
+pvGMWB=function(simPath,df){
+    payOuts=simPath[,"loss"]
+    fees=simPath[,"fee"]
+    pvGMWB=sum((payOuts-fees)*df)
+}
+
+calcGMWB<- function(guessFee,nPeriod,mu,sigma,S0,aWRate,nSim){
+    set.seed(23)
+    df=1/(1+mu)^seq(0,nPeriod)
+    valGMWB=0
+    i=0
+    while(i<nSim){
+        i=i+1
+        W=rnorm(nPeriod)   
+        tmp=GMWB(nPeriod,mu,sigma,S0,guessFee,aWRate,W)
+        valGMWB=valGMWB+pvGMWB(tmp,df)
+    }  
+    valGMWB/nSim
+}
